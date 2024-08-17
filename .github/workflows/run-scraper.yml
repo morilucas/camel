@@ -2,7 +2,7 @@ name: Run Scraper Daily
 
 on:
   schedule:
-    - cron: '0 15 * * *'  # This cron schedule is in UTC time
+    - cron: '47 19 * * *'  # Runs at 19:47 UTC
   workflow_dispatch:
 
 jobs:
