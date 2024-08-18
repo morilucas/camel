@@ -7,24 +7,11 @@ import random
 import pandas as pd
 from datetime import datetime
 import os
-from sqlalchemy import create_engine
 from dotenv import load_dotenv
 import logging
-import subprocess
 
 # Load environment variables from the .env file
 load_dotenv(dotenv_path="C:/Users/lucas/Portfolio/camel/.env")
-
-# Retrieve the database credentials from environment variables
-host = os.getenv("DB_HOST")
-port = os.getenv("DB_PORT")
-dbname = os.getenv("DB_NAME")
-user = os.getenv("DB_USER")
-password = os.getenv("DB_PASSWORD")
-
-# Validate environment variables
-if not all([host, port, dbname, user, password]):
-    raise ValueError("Database credentials are not fully configured. Please check your .env file.")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -106,48 +93,34 @@ try:
 
         logger.info("\n" + df.to_string(index=False))  # Log the DataFrame content
 
-        # Establish a connection to the database using a context manager
-        engine = create_engine(f'postgresql://{user}:{password}@{host}:{port}/{dbname}')
-        with engine.connect() as connection:
-            # Write the DataFrame to the samsung_prices table
-            df.to_sql('samsung_prices', connection, if_exists='append', index=False)
-        logger.info("Data written to the database successfully.")
+        # Define the CSV file path
+        csv_file = "scraped_data.csv"
+
+        # Check if the CSV file exists
+        if os.path.exists(csv_file):
+            # Append the DataFrame to the existing CSV file
+            df.to_csv(csv_file, mode='a', header=False, index=False)
+        else:
+            # Create a new CSV file and save the DataFrame
+            df.to_csv(csv_file, mode='w', header=True, index=False)
+
+        # Aggregate data for analysis
+        if not df.empty:
+            df_aggregated = df.groupby('date').agg(
+                min_price=('price', 'min'),
+                max_price=('price', 'max'),
+                avg_price=('price', 'mean')
+            ).reset_index()
+
+            # Define the aggregated CSV file path
+            aggregated_csv_file = "aggregated_data.csv"
+
+            if os.path.exists(aggregated_csv_file):
+                df_aggregated.to_csv(aggregated_csv_file, mode='a', header=False, index=False)
+            else:
+                df_aggregated.to_csv(aggregated_csv_file, mode='w', header=True, index=False)
     else:
         logger.info("No matching elements found.")
-
-    # Define the CSV file path
-    csv_file = "scraped_data.csv"
-
-    # Check if the CSV file exists
-    if os.path.exists(csv_file):
-        # Append the DataFrame to the existing CSV file
-        df.to_csv(csv_file, mode='a', header=False, index=False)
-    else:
-        # Create a new CSV file and save the DataFrame
-        df.to_csv(csv_file, mode='w', header=True, index=False)
-
-    if not df.empty:
-        df_aggregated = df.groupby('date').agg(
-            min_price=('price', 'min'),
-            max_price=('price', 'max'),
-            avg_price=('price', 'mean')
-        ).reset_index()
-
-        # Define the aggregated CSV file path
-        aggregated_csv_file = "aggregated_data.csv"
-
-        if os.path.exists(aggregated_csv_file):
-            df_aggregated.to_csv(aggregated_csv_file, mode='a', header=False, index=False)
-        else:
-            df_aggregated.to_csv(aggregated_csv_file, mode='w', header=True, index=False)
-    else:
-        logger.info("No data to save.")
-
-    # Commit and push changes to the repository
-    commit_message = f"Data updated: {datetime.today().strftime('%Y-%m-%d')}"
-    subprocess.run(["git", "add", "."])
-    subprocess.run(["git", "commit", "-m", commit_message])
-    subprocess.run(["git", "push"])
 
 except requests.exceptions.RequestException as e:
     logger.error(f"Connection failed: {e}")
