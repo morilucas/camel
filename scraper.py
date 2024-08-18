@@ -7,8 +7,30 @@ import random
 import pandas as pd
 from datetime import datetime
 import os
+from sqlalchemy import create_engine
+from dotenv import load_dotenv
+import logging
+import subprocess
 
-# Initialize the session
+# Load environment variables from the .env file
+load_dotenv()
+
+# Retrieve the database credentials from environment variables
+host = os.getenv("DB_HOST")
+port = os.getenv("DB_PORT")
+dbname = os.getenv("DB_NAME")
+user = os.getenv("DB_USER")
+password = os.getenv("DB_PASSWORD")
+
+# Validate environment variables
+if not all([host, port, dbname, user, password]):
+    raise ValueError("Database credentials are not fully configured. Please check your .env file.")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize the session with retries
 session = requests.Session()
 retry = Retry(
     total=5,  # Total number of retries
@@ -37,7 +59,7 @@ try:
     # Send a GET request to the URL
     response = session.get(url, headers=headers)
     response.raise_for_status()  # Check if the request was successful
-    print("Connection successful:", response.status_code)  # Print the HTTP status code
+    logger.info(f"Connection successful: {response.status_code}")  # Log the HTTP status code
 
     # Parse the HTML content using BeautifulSoup
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -45,7 +67,7 @@ try:
     # Find all div elements with the class 'sg-col-inner'
     div_elements = soup.find_all('div', class_="sg-col-inner")
 
-    print(f"Number of div elements found: {len(div_elements)}")
+    logger.info(f"Number of div elements found: {len(div_elements)}")
 
     # Prepare a list to store the data
     data = []
@@ -63,33 +85,35 @@ try:
         # Convert anchor_text to lowercase for case-insensitive comparison
         anchor_text_lower = anchor_text.lower()
 
-        # Print the anchor text for debugging
-        print(f"Anchor Text (Lowercase): {anchor_text_lower}")
-
         # Check for 'Samsung', 'S24', and 'Renewed' (with or without parentheses)
         contains_keywords = all(word in anchor_text_lower for word in ["samsung", "s24"])
         contains_renewed = "renewed" in anchor_text_lower or "(renewed)" in anchor_text_lower
         contains_exclusions = any(exclusion in anchor_text_lower for exclusion in ["plus", "ultra"])
 
-        # Print the results of the checks for debugging
-        print(f"Contains Keywords (Samsung & S24): {contains_keywords}")
-        print(f"Contains 'Renewed': {contains_renewed}")
-        print(f"Contains Exclusions (Plus or Ultra): {contains_exclusions}")
-
         if contains_keywords and contains_renewed and not contains_exclusions:
-            # Append the results to the data list
-            data.append([datetime.today().strftime('%Y-%m-%d'), anchor_text, span_text])
-            print(f"Added to data: {anchor_text}, {span_text}")  # Debugging line
-
-    # Print the final data list for debugging
-    print(f"Final Data: {data}")
+            # Only add unique entries
+            if [datetime.today().strftime('%Y-%m-%d'), anchor_text, span_text] not in data:
+                # Append the results to the data list
+                data.append([datetime.today().strftime('%Y-%m-%d'), anchor_text, span_text])
+                logger.info(f"Added: {anchor_text} - {span_text}")  # Log each addition
 
     # Convert the list to a DataFrame if not empty
     if data:
-        df = pd.DataFrame(data, columns=['Date', 'Anchor Text', 'Price'])
-        print(df)
+        df = pd.DataFrame(data, columns=['date', 'anchor_text', 'price'])
+
+        # Clean the 'Price' column to remove the dollar sign and convert it to a float
+        df['price'] = df['price'].replace('[\$,]', '', regex=True).astype(float)
+
+        logger.info("\n" + df.to_string(index=False))  # Log the DataFrame content
+
+        # Establish a connection to the database using a context manager
+        engine = create_engine(f'postgresql://{user}:{password}@{host}:{port}/{dbname}')
+        with engine.connect() as connection:
+            # Write the DataFrame to the samsung_prices table
+            df.to_sql('samsung_prices', connection, if_exists='append', index=False)
+        logger.info("Data written to the database successfully.")
     else:
-        print("No matching elements found.")
+        logger.info("No matching elements found.")
 
     # Define the CSV file path
     csv_file = "scraped_data.csv"
@@ -102,29 +126,31 @@ try:
         # Create a new CSV file and save the DataFrame
         df.to_csv(csv_file, mode='w', header=True, index=False)
 
-    # Convert the 'Price' column to numeric, stripping currency symbols
-    df['Price'] = pd.to_numeric(df['Price'].str.replace('$', '').str.replace(',', ''), errors='coerce')
+    if not df.empty:
+        df_aggregated = df.groupby('date').agg(
+            min_price=('price', 'min'),
+            max_price=('price', 'max'),
+            avg_price=('price', 'mean')
+        ).reset_index()
 
-    # Aggregate the data by Date
-    df_aggregated = df.groupby('Date').agg(
-        min_price=('Price', 'min'),
-        max_price=('Price', 'max'),
-        avg_price=('Price', 'mean')
-    ).reset_index()
+        # Define the aggregated CSV file path
+        aggregated_csv_file = "aggregated_data.csv"
 
-    # Print the aggregated DataFrame
-    print(df_aggregated)
-
-    # Define the aggregated CSV file path
-    aggregated_csv_file = "aggregated_data.csv"
-
-    # Check if the aggregated CSV file exists
-    if os.path.exists(aggregated_csv_file):
-        # Append the aggregated DataFrame to the existing CSV file
-        df_aggregated.to_csv(aggregated_csv_file, mode='a', header=False, index=False)
+        if os.path.exists(aggregated_csv_file):
+            df_aggregated.to_csv(aggregated_csv_file, mode='a', header=False, index=False)
+        else:
+            df_aggregated.to_csv(aggregated_csv_file, mode='w', header=True, index=False)
     else:
-        # Create a new CSV file and save the aggregated DataFrame
-        df_aggregated.to_csv(aggregated_csv_file, mode='w', header=True, index=False)
+        logger.info("No data to save.")
+
+    # Commit and push changes to the repository
+    commit_message = f"Data updated: {datetime.today().strftime('%Y-%m-%d')}"
+    subprocess.run(["git", "add", "."])
+    subprocess.run(["git", "commit", "-m", commit_message])
+    subprocess.run(["git", "push"])
 
 except requests.exceptions.RequestException as e:
-    print(f"Connection failed: {e}")
+    logger.error(f"Connection failed: {e}")
+
+except Exception as e:
+    logger.error(f"An error occurred: {e}")
