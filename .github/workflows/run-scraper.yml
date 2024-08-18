@@ -7,7 +7,7 @@ on:
 
 jobs:
   run-scraper:
-    runs-on: self-runner
+    runs-on: [self-hosted, Windows, X64]
 
     steps:
     - name: Checkout Repository
