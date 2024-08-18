@@ -13,7 +13,7 @@ import logging
 import subprocess
 
 # Load environment variables from the .env file
-load_dotenv()
+load_dotenv(dotenv_path="C:/Users/lucas/Portfolio/camel/.env")
 
 # Retrieve the database credentials from environment variables
 host = os.getenv("DB_HOST")
