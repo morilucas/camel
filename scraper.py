@@ -9,6 +9,7 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 import logging
+import subprocess
 
 # Load environment variables from the .env file
 load_dotenv(dotenv_path="C:/Users/lucas/Portfolio/camel/.env")
@@ -121,6 +122,24 @@ try:
                 df_aggregated.to_csv(aggregated_csv_file, mode='w', header=True, index=False)
     else:
         logger.info("No matching elements found.")
+
+    # Stage, commit, and push the changes to the Git repository
+    try:
+        repo_path = "C:/Users/lucas/Portfolio/camel"  # Path to your local Git repository
+        commit_message = "Automated commit with scraped data"
+
+        # Change to the repository directory
+        os.chdir(repo_path)
+
+        # Git commands
+        subprocess.run(["git", "add", "."], check=True)
+        subprocess.run(["git", "commit", "-m", commit_message], check=True)
+        subprocess.run(["git", "push"], check=True)
+
+        logger.info("Changes committed and pushed to the repository.")
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Git operation failed: {e}")
 
 except requests.exceptions.RequestException as e:
     logger.error(f"Connection failed: {e}")
