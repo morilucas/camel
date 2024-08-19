@@ -112,9 +112,6 @@ try:
                 avg_price=('price', 'mean')
             ).reset_index()
 
-            # Convert dates to MM/DD/YYYY format
-            df_aggregated['date'] = pd.to_datetime(df_aggregated['date']).dt.strftime('%m/%d/%Y')
-
             # Define the aggregated CSV file path
             aggregated_csv_file = "aggregated_data.csv"
 
