@@ -14,6 +14,11 @@ import subprocess
 # Load environment variables from the .env file
 load_dotenv(dotenv_path="C:/Users/lucas/Portfolio/camel/.env")
 
+# Get Git credentials from environment variables
+git_username = os.getenv('GIT_USERNAME')
+git_token = os.getenv('GIT_TOKEN')
+repo_url = f"https://{git_username}:{git_token}@github.com/morilucas/camel.git"
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -131,10 +136,14 @@ try:
         # Change to the repository directory
         os.chdir(repo_path)
 
-        # Git commands
+        # Git commands with credentials
         subprocess.run(["git", "add", "."], check=True)
         subprocess.run(["git", "commit", "-m", commit_message], check=True)
-        subprocess.run(["git", "push"], check=True)
+        
+        # Include credentials in the push command
+        subprocess.run([
+            "git", "push", repo_url
+        ], check=True)
 
         logger.info("Changes committed and pushed to the repository.")
 
