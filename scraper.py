@@ -95,7 +95,7 @@ try:
         df = pd.DataFrame(data, columns=['date', 'anchor_text', 'price'])
 
         # Clean the 'Price' column to remove the dollar sign and convert it to a float
-        df['price'] = df['price'].replace('[\$,]', '', regex=True).astype(float)
+        df['price'] = df['price'].replace(r'[\$,]', '', regex=True).astype(float)
 
         logger.info("\n" + df.to_string(index=False))  # Log the DataFrame content
 
