@@ -12,7 +12,7 @@ import logging
 import subprocess
 
 # Load environment variables from the .env file
-load_dotenv(dotenv_path="C:/Users/lucas/Portfolio/camel/.env")
+load_dotenv(dotenv_path="C:/Users/lucas/Documents/Portfolio/camel/.env")
 
 # Get Git credentials from environment variables
 git_username = os.getenv('GIT_USERNAME')
@@ -130,7 +130,7 @@ try:
 
     # Stage, commit, and push the changes to the Git repository
     try:
-        repo_path = "C:/Users/lucas/Portfolio/camel"  # Path to your local Git repository
+        repo_path = "C:/Users/lucas/Documents/Portfolio/camel"  # Path to your local Git repository
         commit_message = "Automated commit with scraped data"
 
         # Change to the repository directory
